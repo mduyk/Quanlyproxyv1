@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QUẢN TRỊ TỔNG HỢP - DELTA RSL</title>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+    <style>
+        :root { --bg: #0d0d16; --card: #161625; --cyan: #00f2ff; --gold: #ffcc00; --red: #ff4444; --green: #00ff88; --blue: #007aff; }
+        body { background: var(--bg); color: white; font-family: 'Segoe UI', sans-serif; padding: 15px; margin: 0; }
+        .box { background: var(--card); padding: 20px; border-radius: 15px; border: 1px solid #333; margin-bottom: 20px; }
+        select, textarea, input { width: 100%; padding: 12px; margin: 10px 0; border-radius: 8px; border: 1px solid #444; background: #000; color: #fff; box-sizing: border-box; outline: none; }
+        textarea { height: 150px; font-family: 'Courier New', monospace; font-size: 12px; }
+        button { border: none; padding: 12px; border-radius: 8px; font-weight: bold; cursor: pointer; transition: 0.3s; }
+        .btn-main { background: var(--cyan); color: #000; width: 100%; font-size: 16px; margin-top: 10px; }
+        .btn-danger { background: var(--red); color: #fff; width: 100%; font-size: 14px; margin-top: 5px; }
+        
+        /* Table nạp tiền */
+        .table-wrap { overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #333; }
+        th { color: #888; text-transform: uppercase; font-size: 11px; }
+        .btn-approve { background: var(--green); color: #000; padding: 5px 10px; margin-right: 5px; }
+        .btn-reject { background: var(--red); color: #fff; padding: 5px 10px; }
+
+        .result-box { margin-top: 15px; padding: 15px; border-radius: 10px; font-size: 13px; display: none; border: 1px solid var(--cyan); background: rgba(0, 242, 255, 0.05); }
+        .duplicate-list { color: var(--red); background: rgba(255, 68, 68, 0.1); padding: 10px; border-radius: 8px; margin-top: 10px; max-height: 100px; overflow-y: auto; border: 1px solid var(--red); }
+        .key-item { display: inline-block; background: #331111; padding: 2px 6px; margin: 2px; border-radius: 4px; font-size: 11px; }
+        .tab-btn { padding: 10px 20px; background: #222; color: #888; border-radius: 8px 8px 0 0; margin-right: 5px; cursor: pointer; display: inline-block; }
+        .tab-btn.active { background: var(--card); color: var(--cyan); border: 1px solid #333; border-bottom: none; }
+    </style>
+</head>
+<body>
+
+<div style="max-width: 900px; margin: auto;">
+    <h2 style="text-align:center; color: var(--cyan);">HỆ THỐNG QUẢN TRỊ TỔNG</h2>
+
+    <div style="margin-bottom: -1px;">
+        <div id="tab1" class="tab-btn active" onclick="switchTab(1)">DUYỆT NẠP TIỀN</div>
+        <div id="tab2" class="tab-btn" onclick="switchTab(2)">QUẢN LÝ KEY</div>
+    </div>
+
+    <div id="content1" class="box">
+        <h3 style="color:var(--gold); margin-top:0;">Yêu cầu nạp tiền chờ duyệt</h3>
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Khách</th>
+                        <th>Số tiền</th>
+                        <th>Thời gian</th>
+                        <th>Hành động</th>
+                    </tr>
+                </thead>
+                <tbody id="list-nap"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <div id="content2" class="box" style="display:none;">
+        <div style="display:flex; gap:10px;">
+            <div style="flex:1">
+                <label style="font-size:12px; color:#888;">Chọn Shop:</label>
+                <select id="target-shop" onchange="updateStats()">
+                    <option value="shop1">SHOP 1 (Delta RSL)</option>
+                    <option value="shop2">SHOP 2</option>
+                </select>
+            </div>
+            <div style="flex:1">
+                <label style="font-size:12px; color:#888;">Loại Key:</label>
+                <select id="key-path">
+                    <option value="ngay">Gói Ngày</option>
+                    <option value="tuan">Gói Tuần</option>
+                    <option value="thang">Gói Tháng</option>
+                    <option value="nam">Gói Năm</option>
+                </select>
+            </div>
+        </div>
+
+        <textarea id="key-input" placeholder="Dán hàng loạt key vào đây (mỗi dòng 1 key)..."></textarea>
+        <button class="btn-main" id="btn-add" onclick="processKeys()">LỌC TRÙNG & THÊM KEY</button>
+
+        <div id="result-area" class="result-box">
+            <div id="summary-text"></div>
+            <div id="duplicate-area" style="display:none;">
+                <div style="margin-top:10px; color:var(--red); font-weight:bold;">Key bị trùng (Đã bỏ qua):</div>
+                <div class="duplicate-list" id="dup-list"></div>
+            </div>
+        </div>
+
+        <div style="margin-top:20px; padding-top:15px; border-top:1px solid #333;">
+            <h4 style="color:var(--gold); margin:0 0 10px 0;">Kho <span id="label-shop">SHOP 1</span>:</h4>
+            <div id="stat-info" style="font-size:13px; display:flex; justify-content:space-between; margin-bottom:15px;">Đang tải...</div>
+            
+            <div style="background:#2a1111; padding:15px; border-radius:10px; border:1px solid #442222;">
+                <label style="font-size:11px; color:var(--red); font-weight:bold;">⚠️ KHU VỰC XÓA DỮ LIỆU:</label>
+                <p style="font-size:11px; margin:5px 0; color:#aaa;">Chọn đúng Shop và Loại Key ở trên trước khi bấm xóa.</p>
+                <button class="btn-danger" onclick="clearKeyPackage()">XÓA TOÀN BỘ KEY TRONG GÓI ĐANG CHỌN</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const config = {
+        apiKey: "AIzaSyBk6R1TDZeAxh37JQLgL_6Wl0v8m8Sg0",
+        authDomain: "shopctv-61f96.firebaseapp.com",
+        databaseURL: "https://shopctv-61f96-default-rtdb.asia-southeast1.firebasedatabase.app/", 
+        projectId: "shopctv-61f96",
+        appId: "1:610663182342:web:83e255ec7921609395f190"
+    };
+    firebase.initializeApp(config);
+    const db = firebase.database();
+
+    function switchTab(n) {
+        document.getElementById('content1').style.display = n === 1 ? 'block' : 'none';
+        document.getElementById('content2').style.display = n === 2 ? 'block' : 'none';
+        document.getElementById('tab1').className = n === 1 ? 'tab-btn active' : 'tab-btn';
+        document.getElementById('tab2').className = n === 2 ? 'tab-btn active' : 'tab-btn';
+    }
+
+    db.ref('bank_requests').on('value', s => {
+        const list = document.getElementById('list-nap');
+        list.innerHTML = "";
+        s.forEach(child => {
+            const d = child.val();
+            if(d.status === 'Pending') {
+                list.innerHTML += `
+                <tr>
+                    <td><b>${d.user}</b><br><small style="color:#666">${d.shop.toUpperCase()}</small></td>
+                    <td style="color:var(--gold)">${Number(d.amount).toLocaleString()}đ</td>
+                    <td>${d.time}</td>
+                    <td>
+                        <button class="btn-approve" onclick="approve('${d.id}', '${d.user}', ${d.amount}, '${d.shop}')">DUYỆT</button>
+                        <button class="btn-reject" onclick="reject('${d.id}', '${d.user}', '${d.shop}')">HỦY</button>
+                    </td>
+                </tr>`;
+            }
+        });
+        if(!list.innerHTML) list.innerHTML = "<tr><td colspan='4' style='text-align:center; color:#555;'>Không có yêu cầu nào</td></tr>";
+    });
+
+    function approve(rid, user, amt, shopPath) {
+        db.ref(`${shopPath}/${user}/balance`).once('value', s => {
+            const newBal = (s.val() || 0) + Number(amt);
+            db.ref(`${shopPath}/${user}/balance`).set(newBal);
+            db.ref(`bank_requests/${rid}`).update({ status: 'Success' });
+            db.ref(`history_pay/${user}/${rid}`).update({ status: 'Success' });
+            alert("Đã cộng tiền cho " + user);
+        });
+    }
+
+    function reject(rid, user, shopPath) {
+        db.ref(`bank_requests/${rid}`).update({ status: 'Fail' });
+        db.ref(`history_pay/${user}/${rid}`).update({ status: 'Fail' });
+        alert("Đã hủy yêu cầu!");
+    }
+
+    function updateStats() {
+        const shop = document.getElementById('target-shop').value;
+        document.getElementById('label-shop').innerText = shop.toUpperCase();
+        db.ref(`keys/${shop}`).on('value', s => {
+            const d = s.val() || {};
+            const c = (p) => d[p] ? Object.keys(d[p]).length : 0;
+            document.getElementById('stat-info').innerHTML = `<span>Ngày: <b>${c('ngay')}</b></span> <span>Tuần: <b>${c('tuan')}</b></span> <span>Tháng: <b>${c('thang')}</b></span> <span>Năm: <b>${c('nam')}</b></span>`;
+        });
+    }
+    updateStats();
+
+    async function processKeys() {
+        const shop = document.getElementById('target-shop').value;
+        const path = document.getElementById('key-path').value;
+        const raw = document.getElementById('key-input').value;
+        const btn = document.getElementById('btn-add');
+        const resBox = document.getElementById('result-area');
+        
+        if(!raw.trim()) return alert("Dán key vào ông nội!");
+        btn.disabled = true;
+        resBox.style.display = "block";
+        document.getElementById('summary-text').innerText = "⏳ Đang đối soát kho...";
+        document.getElementById('duplicate-area').style.display = "none";
+
+        let inputs = [...new Set(raw.split('\n').map(k => k.trim()).filter(k => k !== ""))];
+        
+        try {
+            const snap = await db.ref(`keys/${shop}/${path}`).once('value');
+            const dbKeys = Object.values(snap.val() || {});
+            
+            let toAdd = [], dups = [];
+            inputs.forEach(k => dbKeys.includes(k) ? dups.push(k) : toAdd.push(k));
+
+            document.getElementById('summary-text').innerHTML = `<b style="color:var(--green)">XONG:</b> Thêm mới <b>${toAdd.length}</b> | Trùng <b>${dups.length}</b> (tại ${shop})`;
+            
+            if(dups.length > 0) {
+                document.getElementById('duplicate-area').style.display = "block";
+                document.getElementById('dup-list').innerHTML = dups.map(k => `<span class="key-item">${k}</span>`).join('');
+            }
+
+            if(toAdd.length > 0) {
+                const up = {};
+                toAdd.forEach(k => { const id = db.ref(`keys/${shop}/${path}`).push().key; up[`/keys/${shop}/${path}/${id}`] = k; });
+                await db.ref().update(up);
+                document.getElementById('key-input').value = "";
+            }
+        } catch(e) { alert("Lỗi kết nối!"); }
+        btn.disabled = false;
+    }
+
+    // HÀM XÓA GÓI KEY
+    function clearKeyPackage() {
+        const shop = document.getElementById('target-shop').value;
+        const path = document.getElementById('key-path').value;
+        
+        const confirmClear = confirm(`CẢNH BÁO: Bạn có chắc muốn xóa TOÀN BỘ key của gói [${path.toUpperCase()}] tại [${shop.toUpperCase()}] không?\nHành động này không thể hoàn tác!`);
+        
+        if(confirmClear) {
+            db.ref(`keys/${shop}/${path}`).remove()
+            .then(() => alert(`Đã dọn sạch gói ${path} của ${shop}!`))
+            .catch(e => alert("Lỗi khi xóa: " + e.message));
+        }
+    }
+</script>
+</body>
+</html>
